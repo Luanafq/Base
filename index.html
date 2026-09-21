@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rotina Contábil</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- Firebase via CDN — não precisa de npm/build, funciona em HTML puro -->
+<script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore-compat.js"></script>
+<style>
+  :root{
+    --paper:#EEF0E6;
+    --card:#FBFAF5;
+    --ink:#1F2D24;
+    --ink-soft:#4C5B50;
+    --line:#D9DCCC;
+    --accent:#2C4A6E;
+    --accent-soft:#DCE4EC;
+    --done:#3F7D57;
+    --done-soft:#DCEBE1;
+    --pending:#B98A2E;
+    --pending-soft:#F3E6CC;
+    --late:#A23B3B;
+    --late-soft:#F3DCDC;
+    --radius:10px;
+    --serif:'IBM Plex Serif', Georgia, serif;
+    --sans:'IBM Plex Sans', system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#171B16; --card:#20251F; --ink:#EAEDE4; --ink-soft:#AAB4A3;
+      --line:#333A2F; --accent:#8FB4DD; --accent-soft:#22303F;
+      --done:#7FCB9C; --done-soft:#1D2E23; --pending:#E0B45C; --pending-soft:#332812;
+      --late:#E07E7E; --late-soft:#332020;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#171B16; --card:#20251F; --ink:#EAEDE4; --ink-soft:#AAB4A3;
+    --line:#333A2F; --accent:#8FB4DD; --accent-soft:#22303F;
+    --done:#7FCB9C; --done-soft:#1D2E23; --pending:#E0B45C; --pending-soft:#332812;
+    --late:#E07E7E; --late-soft:#332020;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--paper); color:var(--ink); font-family:var(--sans);
+    min-height:100vh;
+  }
+  header.top{
+    display:flex; align-items:baseline; justify-content:space-between; gap:16px;
+    padding:22px 24px 14px; flex-wrap:wrap; border-bottom:1px solid var(--line);
+  }
+  header.top h1{
+    font-family:var(--serif); font-weight:600; font-size:1.5rem; margin:0;
+    letter-spacing:.2px;
+  }
+  header.top .sub{color:var(--ink-soft); font-size:.85rem; margin-top:2px;}
+  nav.tabs{
+    display:flex; gap:4px; padding:14px 24px 0; border-bottom:1px solid var(--line);
+  }
+  nav.tabs button{
+    font-family:var(--sans); font-size:.9rem; font-weight:500; color:var(--ink-soft);
+    background:none; border:none; padding:8px 14px; cursor:pointer; border-radius:8px 8px 0 0;
+    border-bottom:2px solid transparent; margin-bottom:-1px;
+  }
+  nav.tabs button.active{color:var(--ink); border-bottom-color:var(--accent); background:var(--card);}
+  main{max-width:920px; margin:0 auto; padding:22px 20px 60px;}
+  .row{display:flex; gap:12px; align-items:center; flex-wrap:wrap;}
+  .between{justify-content:space-between;}
+  select, input[type=text], input[type=month]{
+    font-family:var(--sans); font-size:.9rem; padding:8px 10px; border-radius:8px;
+    border:1px solid var(--line); background:var(--card); color:var(--ink);
+  }
+  button.primary{
+    font-family:var(--sans); font-weight:500; font-size:.88rem; color:#fff; background:var(--accent);
+    border:none; padding:9px 16px; border-radius:8px; cursor:pointer;
+  }
+  button.ghost{
+    font-family:var(--sans); font-weight:500; font-size:.82rem; color:var(--accent); background:none;
+    border:1px solid var(--accent-soft); padding:7px 12px; border-radius:8px; cursor:pointer;
+  }
+  button.icon{background:none;border:none;cursor:pointer;color:var(--ink-soft);font-size:.85rem;}
+  .summary{margin:18px 0 24px;}
+  .summary .bar-outer{height:8px; background:var(--line); border-radius:6px; overflow:hidden; margin-top:6px;}
+  .summary .bar-inner{height:100%; background:var(--done); transition:width .3s;}
+  .summary .stats{display:flex; gap:18px; margin-top:8px; font-size:.82rem; color:var(--ink-soft);}
+  .client-card{
+    background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
+    margin-bottom:14px; overflow:hidden;
+  }
+  .client-head{
+    display:flex; align-items:center; justify-content:space-between; padding:14px 16px;
+    cursor:pointer; gap:10px;
+  }
+  .client-head .name{font-family:var(--serif); font-weight:600; font-size:1.05rem;}
+  .client-head .meta{color:var(--ink-soft); font-size:.78rem; margin-top:2px;}
+  .client-head .pct{font-size:.82rem; font-weight:600; color:var(--done);}
+  .dept-block{border-top:1px solid var(--line); padding:12px 16px;}
+  .dept-title{
+    display:flex; justify-content:space-between; align-items:center; font-weight:600; font-size:.85rem;
+    margin-bottom:8px; color:var(--ink);
+  }
+  .dept-title .tag{font-size:.72rem; font-weight:500; padding:2px 8px; border-radius:20px;}
+  .tag.done{background:var(--done-soft); color:var(--done);}
+  .tag.pending{background:var(--pending-soft); color:var(--pending);}
+  ul.checklist{list-style:none; margin:0; padding:0;}
+  ul.checklist li{
+    display:flex; align-items:flex-start; gap:9px; padding:6px 0; font-size:.88rem; line-height:1.4;
+  }
+  ul.checklist li input{margin-top:3px; width:16px; height:16px; accent-color:var(--done);}
+  ul.checklist li.done label{color:var(--ink-soft); text-decoration:line-through;}
+  .empty{color:var(--ink-soft); font-size:.9rem; padding:30px 0; text-align:center;}
+  table.clients{width:100%; border-collapse:collapse; margin-top:16px;}
+  table.clients th{text-align:left; font-size:.75rem; color:var(--ink-soft); font-weight:500; padding:8px 10px; border-bottom:1px solid var(--line);}
+  table.clients td{padding:10px; border-bottom:1px solid var(--line); font-size:.88rem; vertical-align:top;}
+  table.clients tr:last-child td{border-bottom:none;}
+  .badge{font-size:.72rem; padding:2px 8px; border-radius:20px; background:var(--accent-soft); color:var(--accent);}
+  .modal-bg{
+    position:fixed; inset:0; background:rgba(0,0,0,.35); display:flex; align-items:center;
+    justify-content:center; padding:20px; z-index:10;
+  }
+  .modal{background:var(--card); border-radius:var(--radius); padding:22px; width:100%; max-width:420px;}
+  .modal h2{font-family:var(--serif); font-size:1.1rem; margin:0 0 14px;}
+  .modal label{display:block; font-size:.8rem; color:var(--ink-soft); margin:10px 0 4px;}
+  .modal input, .modal select{width:100%;}
+  .modal .actions{display:flex; justify-content:flex-end; gap:8px; margin-top:18px;}
+  .proc-card{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:14px 16px; margin-bottom:12px;}
+  .proc-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;}
+  .proc-head .who{font-family:var(--serif); font-weight:600;}
+  .proc-head .type{font-size:.75rem; color:var(--ink-soft);}
+  footer.note{max-width:920px; margin:0 auto; padding:0 20px 40px; color:var(--ink-soft); font-size:.78rem;}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div>
+    <h1>Rotina Contábil</h1>
+    <div class="sub">Controle mensal por cliente e departamento</div>
+  </div>
+  <div id="connStatus" class="sub"></div>
+</header>
+
+<nav class="tabs">
+  <button class="tab-btn active" data-tab="rotina">Rotina do mês</button>
+  <button class="tab-btn" data-tab="clientes">Clientes</button>
+  <button class="tab-btn" data-tab="societario">Societário</button>
+</nav>
+
+<main>
+
+  <!-- ROTINA DO MÊS -->
+  <section id="tab-rotina">
+    <div class="row between" style="margin-top:18px;">
+      <div class="row">
+        <label style="font-size:.82rem;color:var(--ink-soft);">Mês:</label>
+        <input type="month" id="monthPicker">
+      </div>
+      <div class="row" id="deptFilterWrap"></div>
+    </div>
+
+    <div class="summary">
+      <div class="row between">
+        <span style="font-size:.85rem;font-weight:500;">Progresso geral do mês</span>
+        <span id="summaryPct" style="font-size:.85rem;font-weight:600;color:var(--done);">0%</span>
+      </div>
+      <div class="bar-outer"><div class="bar-inner" id="summaryBar" style="width:0%"></div></div>
+      <div class="stats"><span id="summaryStats">carregando…</span></div>
+    </div>
+
+    <div id="clientsList"><div class="empty">Carregando…</div></div>
+  </section>
+
+  <!-- CLIENTES -->
+  <section id="tab-clientes" style="display:none;">
+    <div class="row between" style="margin-top:18px;">
+      <span style="font-size:.85rem;color:var(--ink-soft);">Cadastro de clientes</span>
+      <button class="primary" id="btnAddClient">+ Novo cliente</button>
+    </div>
+    <table class="clients">
+      <thead><tr><th>Cliente</th><th>CNPJ</th><th>Regime</th><th>Departamentos</th><th></th></tr></thead>
+      <tbody id="clientsTableBody"><tr><td colspan="5" class="empty">Carregando…</td></tr></tbody>
+    </table>
+  </section>
+
+  <!-- SOCIETARIO -->
+  <section id="tab-societario" style="display:none;">
+    <div class="row between" style="margin-top:18px;">
+      <span style="font-size:.85rem;color:var(--ink-soft);">Processos de abertura / alteração em andamento</span>
+      <button class="primary" id="btnAddProc">+ Novo processo</button>
+    </div>
+    <div id="procList" style="margin-top:14px;"><div class="empty">Carregando…</div></div>
+  </section>
+
+</main>
+
+<footer class="note">Os dados ficam salvos automaticamente nesta página e você pode acessá-la de qualquer lugar pelo link.</footer>
+
+<script>
+// ---------------------------------------------------------------
+// TEMPLATES: itens fixos de cada checklist. Edite os textos aqui
+// para mudar o que aparece em toda tarefa nova daquele departamento.
+// ---------------------------------------------------------------
+const DEPARTMENTS = {
+  fiscal: { label: "Fiscal", items: [
+    "Lançamento e conferência de notas fiscais de entrada e saída",
+    "Apuração do PGDAS-D (cálculo do DAS)",
+    "Emissão da guia DAS (vencimento dia 20)",
+    "Envio dos arquivos/guia por e-mail ao cliente",
+    "Conferência de obrigações acessórias aplicáveis",
+    "Conferência de pendências fiscais",
+    "Emissão de guias de parcelamento (a partir do dia 10)"
+  ]},
+  dp: { label: "Pessoal / DP", items: [
+    "Fechamento da folha de pagamento (até o último dia do mês)",
+    "Cálculo e conferência de encargos (INSS, FGTS, IRRF)",
+    "Emissão de guias (FGTS, DARF de encargos)",
+    "Envio dos arquivos/guias por e-mail ao cliente",
+    "Geração e envio do eSocial",
+    "Conferência de admissões, demissões e férias",
+    "Conferência de benefícios (VT, VR, plano de saúde)"
+  ]},
+  contabil: { label: "Contábil", items: [
+    "Lançamentos contábeis do mês (conciliação de contas)",
+    "Conciliação bancária",
+    "Apuração do resultado (DRE) do mês",
+    "Conferência de imobilizado e depreciações",
+    "Envio de balancetes/relatórios ao cliente"
+  ]},
+  extra: { label: "Extra (municipal)", items: [
+    "Consulta de pendências municipais",
+    "Emissão de guia de TFF",
+    "Emissão de guia de TLP/TLL",
+    "Emissão de guia de IPTU",
+    "Envio de e-mail informativo sobre vencimento de alvará"
+  ]}
+};
+const SOCIETARIO_STEPS = [
+  "Recebimento e conferência da documentação do cliente",
+  "Elaboração do contrato social ou alteração contratual",
+  "Coleta de assinaturas dos sócios",
+  "Registro na Junta Comercial",
+  "Obtenção/atualização do CNPJ na Receita Federal",
+  "Inscrição ou alteração estadual (quando aplicável)",
+  "Inscrição ou alteração municipal / alvará",
+  "Envio dos documentos finalizados por e-mail ao cliente"
+];
+
+let db = null;
+let clients = [];       // cache local da lista de clientes
+let tasksByKey = {};    // cache local: "clientId_dept" -> doc de tarefa do mês atual
+let currentMonth = "";
+let activeDeptFilter = null;
+let unsubTasks = null;
+
+function pad(n){ return String(n).padStart(2,"0"); }
+function defaultMonth(){
+  const d = new Date();
+  return d.getFullYear() + "-" + pad(d.getMonth()+1);
+}
+function monthLabel(m){
+  const [y,mo] = m.split("-");
+  const names = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+  return names[parseInt(mo,10)-1] + "/" + y;
+}
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ---------------------------------------------------------------
+// CONFIGURAÇÃO DO FIREBASE
+// Substitua os valores abaixo pelos do seu projeto Firebase
+// (Configurações do projeto > Geral > seu app da Web > SDK setup).
+// ---------------------------------------------------------------
+const firebaseConfig = {
+  apiKey: "AIzaSyBZ3oVFoJKqdDxNZuMVtFBLiNWGiktt5yM",
+  authDomain: "planner-cont-mensal.firebaseapp.com",
+  projectId: "planner-cont-mensal",
+  storageBucket: "planner-cont-mensal.firebasestorage.app",
+  messagingSenderId: "981789846370",
+  appId: "1:981789846370:web:873e7b67dac117d380da3b"
+};
+
+async function init(){
+  const statusEl = document.getElementById("connStatus");
+  try{
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.firestore();
+  }catch(e){
+    statusEl.textContent = "Erro ao conectar ao Firebase — confira a configuração acima.";
+    console.error(e);
+    return;
+  }
+  statusEl.textContent = "";
+
+  document.getElementById("monthPicker").value = defaultMonth();
+  currentMonth = defaultMonth();
+
+  buildDeptFilter();
+  setupTabs();
+  setupClientModal();
+  setupProcModal();
+
+  document.getElementById("monthPicker").addEventListener("change", e => {
+    currentMonth = e.target.value;
+    subscribeTasks();
+  });
+
+  subscribeClients();
+  subscribeTasks();
+  subscribeProcs();
+}
+
+function setupTabs(){
+  document.querySelectorAll(".tab-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      ["rotina","clientes","societario"].forEach(t => {
+        document.getElementById("tab-"+t).style.display = (t === btn.dataset.tab) ? "block" : "none";
+      });
+    });
+  });
+}
+
+function buildDeptFilter(){
+  const wrap = document.getElementById("deptFilterWrap");
+  wrap.innerHTML = "";
+  const allBtn = document.createElement("button");
+  allBtn.className = "ghost"; allBtn.textContent = "Todos deptos";
+  allBtn.onclick = () => { activeDeptFilter = null; renderClientsList(); };
+  wrap.appendChild(allBtn);
+  Object.keys(DEPARTMENTS).forEach(key => {
+    const b = document.createElement("button");
+    b.className = "ghost"; b.textContent = DEPARTMENTS[key].label;
+    b.onclick = () => { activeDeptFilter = key; renderClientsList(); };
+    wrap.appendChild(b);
+  });
+}
+
+// ---------------- CLIENTES ----------------
+function subscribeClients(){
+  db.collection("clients").orderBy("name").onSnapshot(snap => {
+    clients = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderClientsTable();
+    renderClientsList();
+  }, err => console.error("clients error", err));
+}
+
+function renderClientsTable(){
+  const body = document.getElementById("clientsTableBody");
+  if(clients.length === 0){
+    body.innerHTML = '<tr><td colspan="5" class="empty">Nenhum cliente cadastrado ainda.</td></tr>';
+    return;
+  }
+  body.innerHTML = clients.map(c => `
+    <tr>
+      <td>${escapeHtml(c.name||"")}</td>
+      <td>${escapeHtml(c.cnpj||"—")}</td>
+      <td><span class="badge">${escapeHtml(c.regime||"Simples Nacional")}</span></td>
+      <td>${(c.departments||Object.keys(DEPARTMENTS)).map(d=>DEPARTMENTS[d]?DEPARTMENTS[d].label:d).join(", ")}</td>
+      <td><button class="icon" onclick="deleteClient('${c.id}')">Remover</button></td>
+    </tr>
+  `).join("");
+}
+
+function setupClientModal(){
+  document.getElementById("btnAddClient").addEventListener("click", () => openClientModal());
+}
+function openClientModal(){
+  const bg = document.createElement("div");
+  bg.className = "modal-bg";
+  const deptChecks = Object.keys(DEPARTMENTS).map(k =>
+    `<label style="display:flex;align-items:center;gap:6px;font-size:.85rem;color:var(--ink);margin:4px 0;">
+       <input type="checkbox" value="${k}" checked style="width:15px;height:15px;"> ${DEPARTMENTS[k].label}
+     </label>`).join("");
+  bg.innerHTML = `
+    <div class="modal">
+      <h2>Novo cliente</h2>
+      <label>Nome do cliente</label>
+      <input type="text" id="fName" placeholder="Razão social ou nome fantasia">
+      <label>CNPJ</label>
+      <input type="text" id="fCnpj" placeholder="00.000.000/0000-00">
+      <label>Regime tributário</label>
+      <select id="fRegime">
+        <option>Simples Nacional</option>
+        <option>Lucro Presumido</option>
+        <option>Lucro Real</option>
+      </select>
+      <label>Departamentos que atendem este cliente</label>
+      ${deptChecks}
+      <div class="actions">
+        <button class="ghost" id="fCancel">Cancelar</button>
+        <button class="primary" id="fSave">Salvar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(bg);
+  bg.querySelector("#fCancel").onclick = () => bg.remove();
+  bg.querySelector("#fSave").onclick = async () => {
+    const name = bg.querySelector("#fName").value.trim();
+    if(!name){ return; }
+    const depts = Array.from(bg.querySelectorAll('input[type=checkbox]:checked')).map(c => c.value);
+    await db.collection("clients").add({
+      name, cnpj: bg.querySelector("#fCnpj").value.trim(),
+      regime: bg.querySelector("#fRegime").value,
+      departments: depts, active: true, createdAt: Date.now()
+    });
+    bg.remove();
+  };
+}
+async function deleteClient(id){
+  if(!confirm("Remover este cliente? O histórico de tarefas dele não será apagado.")) return;
+  await db.doc("clients/"+id).delete();
+}
+
+// ---------------- ROTINA DO MÊS ----------------
+function taskKey(clientId, dept){ return clientId+"_"+dept; }
+
+function subscribeTasks(){
+  if(unsubTasks) unsubTasks();
+  tasksByKey = {};
+  renderClientsList();
+  unsubTasks = db.collection("tasks").where("month","==",currentMonth).onSnapshot(snap => {
+    tasksByKey = {};
+    snap.docs.forEach(d => { tasksByKey[taskKey(d.data().clientId, d.data().dept)] = { id:d.id, ...d.data() }; });
+    ensureTasksExist().then(renderClientsList);
+  }, err => console.error("tasks error", err));
+}
+
+async function ensureTasksExist(){
+  for(const c of clients){
+    const depts = c.departments || Object.keys(DEPARTMENTS);
+    for(const dept of depts){
+      const key = taskKey(c.id, dept);
+      if(!tasksByKey[key] && DEPARTMENTS[dept]){
+        const items = DEPARTMENTS[dept].items.map(label => ({label, done:false}));
+        const docId = c.id+"__"+dept+"__"+currentMonth;
+        await db.collection("tasks").doc(docId).set({
+          clientId: c.id, clientName: c.name, dept, month: currentMonth,
+          items, updatedAt: Date.now()
+        });
+      }
+    }
+  }
+}
+
+function renderClientsList(){
+  const wrap = document.getElementById("clientsList");
+  if(clients.length === 0){
+    wrap.innerHTML = '<div class="empty">Cadastre um cliente na aba "Clientes" para começar.</div>';
+    updateSummary([]);
+    return;
+  }
+  let allTasks = [];
+  let html = "";
+  clients.forEach(c => {
+    const depts = (c.departments || Object.keys(DEPARTMENTS)).filter(d => !activeDeptFilter || d === activeDeptFilter);
+    if(depts.length === 0) return;
+    let clientTotal = 0, clientDone = 0;
+    let deptHtml = "";
+    depts.forEach(dept => {
+      const task = tasksByKey[taskKey(c.id, dept)];
+      if(!task) return;
+      allTasks.push(task);
+      const done = task.items.filter(i=>i.done).length;
+      clientTotal += task.items.length; clientDone += done;
+      const complete = done === task.items.length;
+      deptHtml += `
+        <div class="dept-block">
+          <div class="dept-title">
+            <span>${DEPARTMENTS[dept].label}</span>
+            <span class="tag ${complete?'done':'pending'}">${done}/${task.items.length}</span>
+          </div>
+          <ul class="checklist">
+            ${task.items.map((it,idx) => `
+              <li class="${it.done?'done':''}">
+                <input type="checkbox" ${it.done?'checked':''} onchange="toggleItem('${task.id}', ${idx}, this.checked)">
+                <label>${escapeHtml(it.label)}</label>
+              </li>`).join("")}
+          </ul>
+        </div>`;
+    });
+    if(!deptHtml) return;
+    const pct = clientTotal ? Math.round(100*clientDone/clientTotal) : 0;
+    html += `
+      <div class="client-card">
+        <div class="client-head" onclick="this.parentElement.classList.toggle('collapsed'); this.nextElementSibling ? null : null; toggleCard(this)">
+          <div>
+            <div class="name">${escapeHtml(c.name)}</div>
+            <div class="meta">${escapeHtml(c.regime||"")}</div>
+          </div>
+          <div class="pct">${pct}%</div>
+        </div>
+        <div class="dept-wrap">${deptHtml}</div>
+      </div>`;
+  });
+  wrap.innerHTML = html || '<div class="empty">Nenhum cliente para este filtro.</div>';
+  updateSummary(allTasks);
+}
+
+function toggleCard(headEl){
+  const wrap = headEl.nextElementSibling;
+  wrap.style.display = (wrap.style.display === "none") ? "block" : "none";
+}
+
+async function toggleItem(taskId, idx, checked){
+  const task = Object.values(tasksByKey).find(t => t.id === taskId);
+  if(!task) return;
+  const items = task.items.map((it,i) => i===idx ? {...it, done:checked} : it);
+  await db.doc("tasks/"+taskId).update({ items, updatedAt: Date.now() });
+}
+
+function updateSummary(allTasks){
+  let total=0, done=0;
+  allTasks.forEach(t => { total += t.items.length; done += t.items.filter(i=>i.done).length; });
+  const pct = total ? Math.round(100*done/total) : 0;
+  document.getElementById("summaryPct").textContent = pct+"%";
+  document.getElementById("summaryBar").style.width = pct+"%";
+  document.getElementById("summaryStats").textContent =
+    `${monthLabel(currentMonth)} · ${allTasks.length} checklist(s) de cliente/departamento · ${done}/${total} itens concluídos`;
+}
+
+// ---------------- SOCIETÁRIO ----------------
+function subscribeProcs(){
+  db.collection("processos").orderBy("createdAt","desc").onSnapshot(snap => {
+    renderProcs(snap.docs.map(d => ({id:d.id, ...d.data()})));
+  }, err => console.error("procs error", err));
+}
+function renderProcs(procs){
+  const wrap = document.getElementById("procList");
+  if(procs.length === 0){
+    wrap.innerHTML = '<div class="empty">Nenhum processo societário em andamento.</div>';
+    return;
+  }
+  wrap.innerHTML = procs.map(p => {
+    const done = p.items.filter(i=>i.done).length;
+    return `
+    <div class="proc-card">
+      <div class="proc-head">
+        <span class="who">${escapeHtml(p.clientName)}</span>
+        <span class="type">${escapeHtml(p.tipo)} · ${done}/${p.items.length}</span>
+      </div>
+      <ul class="checklist">
+        ${p.items.map((it,idx) => `
+          <li class="${it.done?'done':''}">
+            <input type="checkbox" ${it.done?'checked':''} onchange="toggleProcItem('${p.id}', ${idx}, this.checked)">
+            <label>${escapeHtml(it.label)}</label>
+          </li>`).join("")}
+      </ul>
+    </div>`;
+  }).join("");
+}
+async function toggleProcItem(procId, idx, checked){
+  const doc = await db.doc("processos/"+procId).get();
+  if(!doc.exists) return;
+  const items = doc.data().items.map((it,i) => i===idx ? {...it, done:checked} : it);
+  await db.doc("processos/"+procId).update({ items });
+}
+function setupProcModal(){
+  document.getElementById("btnAddProc").addEventListener("click", () => {
+    const bg = document.createElement("div");
+    bg.className = "modal-bg";
+    const opts = clients.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join("");
+    bg.innerHTML = `
+      <div class="modal">
+        <h2>Novo processo societário</h2>
+        <label>Cliente</label>
+        <select id="pClient">${opts || '<option value="">Cadastre um cliente primeiro</option>'}</select>
+        <label>Tipo</label>
+        <select id="pTipo"><option>Abertura</option><option>Alteração</option></select>
+        <div class="actions">
+          <button class="ghost" id="pCancel">Cancelar</button>
+          <button class="primary" id="pSave">Criar</button>
+        </div>
+      </div>`;
+    document.body.appendChild(bg);
+    bg.querySelector("#pCancel").onclick = () => bg.remove();
+    bg.querySelector("#pSave").onclick = async () => {
+      const clientId = bg.querySelector("#pClient").value;
+      if(!clientId) return;
+      const client = clients.find(c=>c.id===clientId);
+      await db.collection("processos").add({
+        clientId, clientName: client.name, tipo: bg.querySelector("#pTipo").value,
+        items: SOCIETARIO_STEPS.map(label => ({label, done:false})),
+        createdAt: Date.now()
+      });
+      bg.remove();
+    };
+  });
+}
+
+init();
+</script>
+</body>
+</html>
