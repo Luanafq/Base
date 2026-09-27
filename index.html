@@ -22,6 +22,8 @@
     --accent:#8B6CE6;
     --accent-2:#B79CFF;
     --accent-soft:#251E42;
+    --logo-navy:#0C3A73;
+    --logo-navy-soft:#173257;
     --done:#4FD1A0;
     --done-soft:#173229;
     --pending:#E0B45C;
@@ -45,9 +47,16 @@
   #loginScreen{
     min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px;
     background:
-      linear-gradient(180deg, rgba(16,18,26,.72), rgba(16,18,26,.94)),
+      linear-gradient(180deg, rgba(12,58,115,.55), rgba(16,18,26,.95)),
       url('background.jpg') center/cover no-repeat;
   }
+  .logo-badge{
+    display:inline-flex; align-items:center; justify-content:center; background:#fff;
+    border-radius:10px; padding:8px; box-shadow:0 2px 10px rgba(0,0,0,.25);
+  }
+  .logo-badge img{display:block; height:34px; width:auto;}
+  .login-card .logo-badge{margin-bottom:16px;}
+  .login-card .logo-badge img{height:44px;}
   .login-card{
     background:rgba(28,32,48,.92); border:1px solid var(--line); border-radius:var(--radius);
     padding:32px 28px; width:100%; max-width:360px; backdrop-filter: blur(6px);
@@ -68,11 +77,12 @@
 
   /* ---------- APP SHELL ---------- */
   header.hero{
-    position:relative; overflow:hidden; padding:30px 24px 20px; border-bottom:1px solid var(--line);
+    position:relative; overflow:hidden; padding:26px 24px 20px; border-bottom:1px solid var(--line);
     background:
-      linear-gradient(115deg, rgba(16,18,26,.94) 20%, rgba(139,108,230,.28) 100%),
+      linear-gradient(115deg, rgba(12,20,36,.94) 15%, rgba(12,58,115,.55) 55%, rgba(139,108,230,.35) 100%),
       url('background.jpg') top right/cover no-repeat;
   }
+  header.hero .brand{display:flex; align-items:center; gap:12px;}
   header.hero .row{display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap;}
   header.hero h1{font-family:var(--serif); font-weight:600; font-size:1.7rem; margin:0; color:#fff; letter-spacing:.2px;}
   header.hero .sub{color:var(--ink-soft); font-size:.86rem; margin-top:4px;}
@@ -192,6 +202,7 @@
 <!-- ---------- TELA DE LOGIN ---------- -->
 <div id="loginScreen">
   <div class="login-card">
+    <div class="logo-badge"><img src="logo.png" alt="Luana Queiroz Assessoria Contábil"></div>
     <h1>Rotina Contábil</h1>
     <div class="sub">Acesso restrito — informe seu login</div>
     <label>E-mail</label>
@@ -208,9 +219,12 @@
 
   <header class="hero">
     <div class="row">
-      <div>
-        <h1>Rotina Contábil</h1>
-        <div class="sub">Controle mensal por cliente e departamento</div>
+      <div class="brand">
+        <div class="logo-badge"><img src="logo.png" alt="Luana Queiroz Assessoria Contábil"></div>
+        <div>
+          <h1>Rotina Contábil</h1>
+          <div class="sub">Controle mensal por cliente e departamento</div>
+        </div>
       </div>
       <button class="logout" id="btnLogout">Sair</button>
     </div>
